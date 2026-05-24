@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sudoku ZKP — ZK Proofs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body, {
+      delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '$', right: '$', display: false}
+      ],
+      throwOnError: false
+    });"></script>
+  <style>
+    /* ── Sudoku grid ── */
+    .sudoku-wrap { overflow-x: auto; line-height: 0; }
+
+    .sudoku-grid {
+      border-collapse: collapse;
+      border: 2px solid var(--muted);
+    }
+
+    .sudoku-cell {
+      width: 38px; height: 38px;
+      text-align: center; vertical-align: middle;
+      font-size: 1rem; font-weight: 500;
+      border: 1px solid #252530;
+      background: var(--bg);
+      color: var(--heading);
+      transition: background 0.18s, color 0.18s;
+      user-select: none;
+    }
+
+    .sudoku-cell.box-right  { border-right:  2px solid var(--muted); }
+    .sudoku-cell.box-bottom { border-bottom: 2px solid var(--muted); }
+
+    .sudoku-cell.is-preset  { color: var(--accent); font-weight: 700; }
+    .sudoku-cell.is-locked  { color: #383850; font-size: 0.75rem; background: rgba(255,255,255,0.012); }
+
+    .sudoku-cell.hl-orange  { background: rgba(196,100,60,0.18); }
+    .sudoku-cell.hl-green   { background: rgba(70,160,100,0.16); }
+    .sudoku-cell.hl-reveal  { background: rgba(129,140,248,0.15); color: var(--heading); font-weight: 600; }
+    .sudoku-cell.hl-green.hl-reveal { background: rgba(70,160,100,0.18); color: var(--heading); font-weight: 600; }
+
+    /* ── Phase progress bar ── */
+    .phase-bar {
+      display: flex;
+      gap: 3px;
+      margin-bottom: 1rem;
+    }
+    .phase-step {
+      flex: 1;
+      height: 2px;
+      border-radius: 1px;
+      background: var(--border);
+      transition: background 0.3s;
+    }
+    .phase-step.done    { background: var(--muted); }
+    .phase-step.current { background: var(--accent); }
+
+    /* ── Demo layout ── */
+    .sudoku-demo-body {
+      display: flex;
+      flex-direction: row;
+      gap: 2rem;
+      align-items: flex-start;
+      margin-top: 0.5rem;
+    }
+
+    .sudoku-left  { flex: 0 0 auto; }
+    .sudoku-right { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.8rem; }
+
+    /* ── Info panels ── */
+    .info-panel {
+      background: rgba(255,255,255,0.022);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.8rem 1rem;
+    }
+
+    .info-panel-label {
+      font-size: 0.58rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.13em;
+      color: var(--muted);
+      margin-bottom: 0.55rem;
+    }
+
+    /* ── Permutation mapping chips ── */
+    .perm-map {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    .perm-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      padding: 0.18rem 0.55rem;
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--text);
+    }
+
+    .perm-chip .arr { color: var(--muted); }
+
+    /* ── Commitment hash mini-grid ── */
+    .commit-mini-grid {
+      display: grid;
+      grid-template-columns: repeat(9, 1fr);
+      gap: 2px;
+    }
+
+    .commit-cell {
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--mono);
+      font-size: 0.38rem;
+      background: var(--bg-code);
+      border-radius: 2px;
+      color: #383854;
+      cursor: default;
+      overflow: hidden;
+      transition: background 0.15s;
+    }
+
+    .commit-cell.filled     { color: #5858a0; }
+    .commit-cell.highlighted { background: rgba(129,140,248,0.15); color: var(--accent); }
+
+    /* ── Challenge selector ── */
+    .challenge-type-row {
+      display: flex;
+      gap: 0.35rem;
+      margin-bottom: 0.55rem;
+    }
+
+    .ctype-btn {
+      flex: 1;
+      padding: 0.28rem 0;
+      font-family: var(--font);
+      font-size: 0.72rem;
+      font-weight: 500;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--muted);
+      cursor: pointer;
+      transition: color 0.14s, border-color 0.14s, background 0.14s;
+    }
+
+    .ctype-btn:hover { color: var(--text); border-color: var(--muted); }
+
+    .ctype-btn.sel {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: rgba(129,140,248,0.07);
+    }
+
+    .index-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      margin-bottom: 0.45rem;
+    }
+
+    .idx-btn {
+      width: 26px; height: 26px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--muted);
+      cursor: pointer;
+      transition: color 0.14s, border-color 0.14s, background 0.14s;
+    }
+
+    .idx-btn:hover { color: var(--text); border-color: var(--muted); }
+
+    .idx-btn.sel {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: rgba(129,140,248,0.07);
+    }
+
+    .challenge-hint {
+      font-size: 0.76rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* ── Revealed table ── */
+    .reveal-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.74rem;
+    }
+
+    .reveal-table th {
+      font-size: 0.58rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      padding: 0 0.4rem 0.35rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .reveal-table td {
+      padding: 0.18rem 0.4rem;
+      font-family: var(--mono);
+      vertical-align: middle;
+    }
+
+    .reveal-table td:first-child { color: var(--muted); }
+    .reveal-table td:nth-child(2) { color: var(--heading); font-weight: 600; font-family: var(--font); }
+    .reveal-table td:nth-child(3), .reveal-table td:nth-child(4) { color: #585878; font-size: 0.68rem; }
+
+    .reveal-row-orange { background: rgba(196,100,60,0.08); }
+    .reveal-row-green  { background: rgba(70,160,100,0.08); }
+
+    /* ── Verify result ── */
+    .verify-check {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.83rem;
+      padding: 0.22rem 0;
+    }
+
+    .check-icon { font-size: 0.9rem; }
+    .check-ok   { color: #4fa870; }
+    .check-fail { color: #c44444; }
+
+    /* ── Confidence bar ── */
+    .conf-bar-wrap {
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      margin: 0.6rem 0 0.25rem;
+      overflow: hidden;
+    }
+
+    .conf-bar {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      transition: width 0.5s ease;
+      width: 0%;
+    }
+
+    /* ── Mobile ── */
+    @media (max-width: 860px) {
+      .sudoku-demo-body { flex-direction: column; }
+      .sudoku-left { width: 100%; display: flex; justify-content: center; }
+    }
+
+    @media (max-width: 520px) {
+      .sudoku-cell { width: 30px; height: 30px; font-size: 0.85rem; }
+      .challenge-type-row { flex-wrap: wrap; }
+    }
+
+    @media (max-width: 380px) {
+      .sudoku-cell { width: 26px; height: 26px; font-size: 0.78rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="overlay" id="overlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <a href="index.html" class="sidebar-logo">
+    <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+      <polygon points="10,1 19,5.5 19,14.5 10,19 1,14.5 1,5.5"
+               stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      <text x="10" y="13.5" text-anchor="middle" fill="currentColor"
+            font-size="6.5" font-weight="700" font-family="monospace">ZK</text>
+    </svg>
+    <span class="sidebar-logo-text">ZK Proofs</span>
+  </a>
+
+  <nav class="sidebar-nav">
+    <a href="index.html">Introduction</a>
+
+    <div class="nav-group">Core Concepts</div>
+    <span class="nav-soon">The Three Properties</span>
+    <span class="nav-soon">Interactive Proofs</span>
+
+    <div class="nav-group">Protocols</div>
+    <span class="nav-soon">Schnorr Protocol</span>
+    <a href="chapters/alibaba.html">Ali Baba Cave</a>
+
+    <div class="nav-group">Proof Systems</div>
+    <span class="nav-soon">zkSNARKs</span>
+    <span class="nav-soon">zkSTARKs</span>
+
+    <div class="nav-group">Applications</div>
+    <span class="nav-soon">Real-World Uses</span>
+
+    <div class="nav-group">Interactive</div>
+    <div class="nav-accordion" data-key="interactive">
+      <button class="nav-accordion-btn">
+        <span>Demos</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" class="nav-accordion-icon">
+          <path d="M3 2l4 3-4 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div class="nav-accordion-items">
+        <a href="chapters/graph-coloring.html" class="nav-child">Graph Coloring</a>
+        <a href="zkp.html" class="nav-child">Sudoku</a>
+        <a href="chapters/alibaba.html" class="nav-child">Ali Baba Cave</a>
+      </div>
+    </div>
+
+    <div class="nav-group">Resources</div>
+    <span class="nav-soon">Further Reading</span>
+  </nav>
+</aside>
+
+<div class="main" id="main">
+
+  <header class="topbar">
+    <button class="toggle-btn" id="toggleBtn" aria-label="Toggle sidebar">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none"
+           stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <line x1="1" y1="3.5"  x2="14" y2="3.5"/>
+        <line x1="1" y1="7.5"  x2="14" y2="7.5"/>
+        <line x1="1" y1="11.5" x2="14" y2="11.5"/>
+      </svg>
+    </button>
+    <span class="topbar-crumb">Interactive · Sudoku ZKP</span>
+  </header>
+
+  <div class="content">
+
+    <div class="page-meta">Interactive · Demos</div>
+    <h1>Sudoku Zero-Knowledge Proof</h1>
+
+    <p>
+      Sudoku solutions can be proven via zero-knowledge proof. If Peggy has a solution to
+      Victor's puzzle, she can convince him her solution is valid without ever revealing
+      the solution — or any information about it beyond its existence.
+    </p>
+
+    <!-- ── 1. The Setup ── -->
+    <h2>The Setup</h2>
+    <p>
+      Two parties:
+    </p>
+    <ul>
+      <li><strong>Peggy (Prover)</strong> — has a valid solution to a Sudoku puzzle.</li>
+      <li><strong>Victor (Verifier)</strong> — has the puzzle and wants proof the solution exists,
+          but Peggy won't reveal it without payment.</li>
+    </ul>
+
+    <!-- ── 2. The Protocol ── -->
+    <h2>The Protocol</h2>
+    <p>
+      The Sudoku ZKP works very similarly to the graph coloring proof. Because every valid
+      Sudoku solution remains valid under any relabeling of the digits 1–9, Peggy can hide her
+      solution simply by applying a random <strong>digit permutation</strong>
+      $\sigma : \{1,\ldots,9\} \to \{1,\ldots,9\}$ before committing.
+    </p>
+
+    <h3>Step 1 — Commit</h3>
+    <p>
+      Peggy permutes her solution with a freshly chosen $\sigma$ and then commits to every
+      cell using a cryptographic hash with a random nonce:
+    </p>
+    $$\text{commit}_{i} = \text{SHA-256}\!\left(\,\sigma(d_i) \;\|\; r_i\,\right)$$
+    <p>
+      where $d_i$ is the original digit at cell $i$ and $r_i$ is a large random string
+      chosen fresh every round. She sends all 81 commitments to Victor. Victor sees 81
+      sealed envelopes — he cannot open any of them.
+    </p>
+
+    <h3>Step 2 — Challenge</h3>
+    <p>
+      Victor randomly picks one of <strong>27 challenge groups</strong>: any of the 9 rows,
+      9 columns, or 9 subsquares. He may also ask Peggy to reveal all <em>preset</em> cells
+      to verify permutation consistency. Each group must contain digits 1–9 exactly once in
+      any valid solution.
+    </p>
+
+    <h3>Step 3 — Reveal &amp; Verify</h3>
+    <p>
+      Peggy opens the 9 commitments for the challenged group, disclosing the permuted
+      digit and nonce for each. Victor verifies three things:
+    </p>
+    <ul>
+      <li>Every hash matches: $\text{SHA-256}(\sigma(d_i) \| r_i) = \text{commit}_i$</li>
+      <li>The 9 revealed digits are all distinct (1–9, each exactly once)</li>
+      <li>For preset cells: the permutation $\sigma$ is consistent across the board</li>
+    </ul>
+    <p>
+      If Peggy is cheating, at least one row, column, or subsquare contains a duplicate.
+      The probability of Victor missing it in a single round is at most $\tfrac{26}{27}$.
+      After $k$ independent rounds:
+    </p>
+    $$P(\text{not caught after } k \text{ rounds}) \;\leq\; \left(\frac{26}{27}\right)^{\!k}$$
+
+    <div class="callout note">
+      <div class="callout-label">Why This Is Zero-Knowledge</div>
+      Every round uses a fresh random permutation. The 9 digits Victor sees are just some
+      arrangement of 1–9 — information he already knew any valid group must contain.
+      He learns nothing about the actual digit assignment. A simulator could produce
+      identically distributed transcripts without ever seeing the real solution.
+    </div>
+
+    <!-- ── 3. Interactive Demo ── -->
+    <h2>Try It Yourself</h2>
+    <p>
+      The demo below runs a real instance of the protocol. You act as both Peggy and Victor.
+      Hashes are genuine SHA-256 digests computed in your browser via the Web Crypto API.
+    </p>
+
+    <figure>
+    <section class="demo-section" id="sudokuDemo" aria-label="Interactive Sudoku ZKP demo">
+      <div class="demo-inner">
+
+        <!-- Header row: title + stats -->
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;">
+          <div>
+            <span class="demo-eyebrow">Interactive Demo</span>
+            <div class="demo-title">Sudoku ZKP Protocol</div>
+            <p class="demo-desc" id="demoMsg">Click <strong>Begin Protocol</strong> to start a round.</p>
+          </div>
+          <div class="demo-stats" style="margin:0; border:none; padding:0; gap:1.5rem; flex-shrink:0;">
+            <div class="demo-stat">
+              <div class="demo-stat-value" id="statRounds">0</div>
+              <div class="demo-stat-label">Rounds</div>
+            </div>
+            <div class="demo-stat">
+              <div class="demo-stat-value" id="statConf">—</div>
+              <div class="demo-stat-label">Confidence</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Phase progress bar (5 steps) -->
+        <div class="phase-bar">
+          <div class="phase-step current" id="ps0"></div>
+          <div class="phase-step" id="ps1"></div>
+          <div class="phase-step" id="ps2"></div>
+          <div class="phase-step" id="ps3"></div>
+          <div class="phase-step" id="ps4"></div>
+        </div>
+
+        <!-- Main demo area -->
+        <div class="sudoku-demo-body">
+
+          <!-- LEFT: Sudoku grid -->
+          <div class="sudoku-left">
+            <div class="sudoku-wrap">
+              <div id="sudokuGridWrap"></div>
+            </div>
+          </div>
+
+          <!-- RIGHT: Phase-specific panels -->
+          <div class="sudoku-right">
+
+            <!-- Panel: Setup -->
+            <div id="panelSetup">
+              <div class="info-panel">
+                <div class="info-panel-label">The Problem</div>
+                <p style="font-size:0.83rem; color:var(--text); line-height:1.7; margin:0;">
+                  Victor has this Sudoku puzzle (highlighted cells in
+                  <span style="color:var(--accent); font-weight:600;">indigo</span> are the presets).
+                  Peggy claims to have a valid solution and will prove it
+                  without showing a single digit of her answer.
+                </p>
+              </div>
+            </div>
+
+            <!-- Panel: Committed (hashes sent) -->
+            <div id="panelCommitted" style="display:none;">
+              <div class="info-panel" style="margin-bottom:0.7rem;">
+                <div class="info-panel-label">Peggy's Digit Permutation (secret)</div>
+                <div class="perm-map" id="permMap"></div>
+              </div>
+              <div class="info-panel">
+                <div class="info-panel-label">81 SHA-256 Commitments sent to Victor</div>
+                <div class="commit-mini-grid" id="commitMiniGrid"></div>
+                <p style="font-size:0.68rem; color:var(--muted); margin-top:0.45rem; line-height:1.5;">
+                  Each cell is a SHA-256 hash of <code>permuted_digit‑nonce</code>.
+                  Hover to see the full hash.
+                </p>
+              </div>
+            </div>
+
+            <!-- Panel: Challenge selection -->
+            <div id="panelChallenge" style="display:none;">
+              <div class="info-panel">
+                <div class="info-panel-label">Victor's Challenge</div>
+                <div class="challenge-type-row" id="ctypeRow">
+                  <button class="ctype-btn sel" data-t="row">Row</button>
+                  <button class="ctype-btn" data-t="column">Column</button>
+                  <button class="ctype-btn" data-t="square">Box</button>
+                  <button class="ctype-btn" data-t="preset">Presets</button>
+                </div>
+                <div class="index-row" id="idxRow"></div>
+                <p class="challenge-hint" id="challengeHint">Pick a row for Peggy to open.</p>
+              </div>
+              <div class="info-panel">
+                <div class="info-panel-label">Commitments (highlighted = will be opened)</div>
+                <div class="commit-mini-grid" id="commitMiniGrid2"></div>
+              </div>
+            </div>
+
+            <!-- Panel: Revealed values -->
+            <div id="panelRevealed" style="display:none;">
+              <div class="info-panel">
+                <div class="info-panel-label">Revealed Values &amp; Nonces</div>
+                <div id="revealedTableWrap" style="overflow-y:auto; max-height:220px;">
+                  <table class="reveal-table" id="revealedTable">
+                    <thead>
+                      <tr>
+                        <th>Cell</th>
+                        <th>Value</th>
+                        <th>Nonce (prefix)</th>
+                        <th>Commit (prefix)</th>
+                      </tr>
+                    </thead>
+                    <tbody id="revealedBody"></tbody>
+                  </table>
+                </div>
+                <p style="font-size:0.68rem; color:var(--muted); margin-top:0.45rem;">
+                  <span style="display:inline-block; width:8px; height:8px; background:rgba(196,100,60,0.3); border-radius:1px; margin-right:4px;"></span>orange = challenged group &nbsp;
+                  <span style="display:inline-block; width:8px; height:8px; background:rgba(70,160,100,0.3); border-radius:1px; margin-right:4px;"></span>green = consistency check
+                </p>
+              </div>
+            </div>
+
+            <!-- Panel: Verification result -->
+            <div id="panelVerified" style="display:none;">
+              <div class="info-panel">
+                <div class="info-panel-label">Verification Result</div>
+                <div id="verifyChecks"></div>
+                <div class="conf-bar-wrap">
+                  <div class="conf-bar" id="confBar"></div>
+                </div>
+                <p style="font-size:0.7rem; color:var(--muted); margin:0; line-height:1.5;">
+                  Probability Peggy is not cheating, assuming she had a valid solution.
+                </p>
+              </div>
+            </div>
+
+          </div><!-- /sudoku-right -->
+        </div><!-- /sudoku-demo-body -->
+
+        <!-- Action buttons -->
+        <div class="demo-actions" style="margin-top:1.2rem;">
+          <button class="demo-action-btn" id="actionBtn" onclick="handleAction()">Begin Protocol</button>
+          <button class="demo-again-btn" id="resetBtn" onclick="resetDemo()" style="display:none;">Reset</button>
+        </div>
+
+      </div><!-- /demo-inner -->
+
+      <p class="demo-caption">
+        <strong>Figure 2.</strong> &ensp;Interactive simulation of the Sudoku ZKP protocol.
+        SHA-256 hashes are computed via the Web Crypto API in your browser.
+        Protocol design based on
+        <a href="https://manishearth.github.io/blog/2016/08/10/interactive-sudoku-zero-knowledge-proof/">
+          Manish Goregaokar's Sudoku ZKP</a>.
+      </p>
+    </section>
+    </figure>
+
+    <!-- ── 4. How Many Rounds? ── -->
+    <h2>How Many Rounds?</h2>
+    <p>
+      With 27 possible challenge groups, the soundness error per round is $\frac{26}{27} \approx 96.3\%$.
+      This decreases exponentially with each round:
+    </p>
+    <table class="math-table">
+      <thead>
+        <tr>
+          <th>Rounds ($k$)</th>
+          <th>Soundness error $\left(\tfrac{26}{27}\right)^k$</th>
+          <th>Verifier confidence</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td>  <td>96.3%</td><td>3.7%</td></tr>
+        <tr><td>10</td> <td>69.0%</td><td>31.0%</td></tr>
+        <tr><td>50</td> <td>15.3%</td><td>84.7%</td></tr>
+        <tr><td>100</td><td>2.3%</td> <td>97.7%</td></tr>
+        <tr><td>200</td><td>0.06%</td><td>99.94%</td></tr>
+        <tr><td>500</td><td>$\approx 10^{-8}$</td><td>$\approx 100\%$</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Compare with graph coloring, which had $\frac{m-1}{m}$ soundness error per round where
+      $m$ is the number of edges. For the classic 6-edge example that was $\frac{5}{6} \approx 83.3\%$
+      per round — much better per-round guarantees. Sudoku's 27 groups give weaker per-round reduction
+      but the protocol applies to a richer, more structured problem.
+    </p>
+
+    <div class="page-nav">
+      <a href="chapters/graph-coloring.html">← Graph Coloring</a>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<script src="js/sidebar.js"></script>
+<script>
+// ─────────────────────────────────────────────────────────
+// Sudoku ZKP — Interactive Demo
+// Uses Web Crypto API for real SHA-256 hashes
+// ─────────────────────────────────────────────────────────
+
+// Known puzzle (0 = empty)
+const PRESET = [
+  5,3,0,0,7,0,0,0,0,
+  6,0,0,1,9,5,0,0,0,
+  0,9,8,0,0,0,0,6,0,
+  8,0,0,0,6,0,0,0,3,
+  4,0,0,8,0,3,0,0,1,
+  7,0,0,0,2,0,0,0,6,
+  0,6,0,0,0,0,2,8,0,
+  0,0,0,4,1,9,0,0,5,
+  0,0,0,0,8,0,0,7,9
+];
+
+// Complete solution
+const SOLUTION = [
+  5,3,4,6,7,8,9,1,2,
+  6,7,2,1,9,5,3,4,8,
+  1,9,8,3,4,2,5,6,7,
+  8,5,9,7,6,1,4,2,3,
+  4,2,6,8,5,3,7,9,1,
+  7,1,3,9,2,4,8,5,6,
+  9,6,1,5,3,7,2,8,4,
+  2,8,7,4,1,9,6,3,5,
+  3,4,5,2,8,6,1,7,9
+];
+
+// ── State ──────────────────────────────────────────────
+const PHASE_ORDER = ['setup', 'committed', 'challenge', 'revealed', 'verified'];
+let phase          = 'setup';
+let perm           = null;   // perm[d] = permuted digit (indices 1–9)
+let nonces         = null;   // String[81]
+let hashes         = null;   // String[81]  hex SHA-256
+let permuted       = null;   // Number[81]  permuted solution
+let challengeType  = 'row';
+let challengeIdx   = 0;
+let orangeIdxs     = [];
+let greenIdxs      = [];
+let rounds         = 0;
+
+// ── Crypto helpers ─────────────────────────────────────
+async function sha256(str) {
+  const buf    = new TextEncoder().encode(str);
+  const digest = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(digest))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function randomPerm() {
+  const p = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  for (let i = 9; i > 1; i--) {
+    const j = 1 + Math.floor(Math.random() * i);
+    [p[i], p[j]] = [p[j], p[i]];
+  }
+  return p;
+}
+
+function randomNonce() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(12)))
+    .map(b => b.toString(36).padStart(2, '0')).join('').slice(0, 14);
+}
+
+// ── Index helpers ──────────────────────────────────────
+function getOrangeIndices(type, idx) {
+  if (type === 'row')    return Array.from({length: 9}, (_, c) => idx * 9 + c);
+  if (type === 'column') return Array.from({length: 9}, (_, r) => r * 9 + idx);
+  if (type === 'square') {
+    const br = Math.floor(idx / 3) * 3, bc = (idx % 3) * 3;
+    return Array.from({length: 9}, (_, k) => (br + Math.floor(k / 3)) * 9 + bc + (k % 3));
+  }
+  if (type === 'preset') return PRESET.map((v, i) => v ? i : -1).filter(i => i >= 0);
+  return [];
+}
+
+function getGreenIndices(orangeSet) {
+  const presetDigitsInOrange = new Set(
+    orangeSet.filter(i => PRESET[i]).map(i => PRESET[i])
+  );
+  return Array.from({length: 81}, (_, i) => i).filter(
+    i => !orangeSet.includes(i) && PRESET[i] && presetDigitsInOrange.has(PRESET[i])
+  );
+}
+
+// ── Grid construction (runs once) ─────────────────────
+function buildGrid() {
+  const wrap  = document.getElementById('sudokuGridWrap');
+  const table = document.createElement('table');
+  table.className = 'sudoku-grid';
+  for (let r = 0; r < 9; r++) {
+    const tr = document.createElement('tr');
+    for (let c = 0; c < 9; c++) {
+      const td = document.createElement('td');
+      td.className = 'sudoku-cell';
+      td.id = `sc-${r * 9 + c}`;
+      if (c === 2 || c === 5) td.classList.add('box-right');
+      if (r === 2 || r === 5) td.classList.add('box-bottom');
+      tr.appendChild(td);
+    }
+    table.appendChild(tr);
+  }
+  wrap.appendChild(table);
+}
+
+function renderGrid() {
+  for (let i = 0; i < 81; i++) {
+    const el = document.getElementById(`sc-${i}`);
+    if (!el) continue;
+
+    // Clear state classes
+    el.classList.remove('is-preset', 'is-locked', 'hl-orange', 'hl-green', 'hl-reveal');
+    el.title = '';
+
+    const isPreset    = PRESET[i] !== 0;
+    const isOrange    = orangeIdxs.includes(i);
+    const isGreen     = greenIdxs.includes(i);
+    const isRevealed  = isOrange || isGreen;
+
+    if (phase === 'setup') {
+      el.textContent = isPreset ? PRESET[i] : '';
+      if (isPreset) el.classList.add('is-preset');
+
+    } else if (phase === 'committed') {
+      el.textContent = isPreset ? PRESET[i] : '·';
+      el.classList.add(isPreset ? 'is-preset' : 'is-locked');
+
+    } else if (phase === 'challenge') {
+      el.textContent = isPreset ? PRESET[i] : '·';
+      el.classList.add(isPreset ? 'is-preset' : 'is-locked');
+      if (isOrange) el.classList.add('hl-orange');
+      if (isGreen)  el.classList.add('hl-green');
+
+    } else if (phase === 'revealed' || phase === 'verified') {
+      if (isRevealed) {
+        el.textContent = permuted[i];
+        el.classList.add('hl-reveal');
+        if (isGreen) el.classList.add('hl-green');
+        if (hashes?.[i]) el.title = hashes[i];
+      } else if (isPreset) {
+        el.textContent = PRESET[i];
+        el.classList.add('is-preset');
+      } else {
+        el.textContent = '·';
+        el.classList.add('is-locked');
+      }
+    }
+  }
+}
+
+// ── Commit mini-grid ───────────────────────────────────
+function buildCommitGrid(containerId, highlightSet = []) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = '';
+  for (let i = 0; i < 81; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'commit-cell';
+    if (hashes?.[i]) {
+      cell.textContent = hashes[i].slice(0, 4);
+      cell.title       = hashes[i];
+      cell.classList.add('filled');
+    }
+    if (highlightSet.includes(i)) cell.classList.add('highlighted');
+    el.appendChild(cell);
+  }
+}
+
+// ── Permutation map display ────────────────────────────
+function renderPermMap() {
+  const el = document.getElementById('permMap');
+  el.innerHTML = '';
+  for (let d = 1; d <= 9; d++) {
+    const chip = document.createElement('div');
+    chip.className = 'perm-chip';
+    chip.innerHTML = `${d}<span class="arr">→</span>${perm[d]}`;
+    el.appendChild(chip);
+  }
+}
+
+// ── Phase bar ──────────────────────────────────────────
+function updatePhaseBar() {
+  const idx = PHASE_ORDER.indexOf(phase);
+  for (let i = 0; i < 5; i++) {
+    const el = document.getElementById(`ps${i}`);
+    el.classList.remove('current', 'done');
+    if (i < idx)  el.classList.add('done');
+    if (i === idx) el.classList.add('current');
+  }
+}
+
+// ── Panel switcher ─────────────────────────────────────
+function showPanel(id) {
+  ['panelSetup','panelCommitted','panelChallenge','panelRevealed','panelVerified'].forEach(p => {
+    document.getElementById(p).style.display = (p === id) ? '' : 'none';
+  });
+}
+
+// ── UI helpers ─────────────────────────────────────────
+function setMsg(html)    { document.getElementById('demoMsg').innerHTML = html; }
+function setBtn(t, off)  { const b = document.getElementById('actionBtn'); b.textContent = t; b.disabled = !!off; }
+function showReset(v)    { document.getElementById('resetBtn').style.display = v ? '' : 'none'; }
+
+// ── Challenge controls ─────────────────────────────────
+function initChallengeControls() {
+  document.querySelectorAll('.ctype-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      challengeType = btn.dataset.t;
+      challengeIdx  = 0;
+      document.querySelectorAll('.ctype-btn').forEach(b => b.classList.remove('sel'));
+      btn.classList.add('sel');
+      rebuildIndexRow();
+      updateChallengeSelection();
+    });
+  });
+}
+
+function rebuildIndexRow() {
+  const row   = document.getElementById('idxRow');
+  row.innerHTML = '';
+  if (challengeType === 'preset') return;
+  for (let i = 0; i < 9; i++) {
+    const btn = document.createElement('button');
+    btn.className   = 'idx-btn' + (i === challengeIdx ? ' sel' : '');
+    btn.textContent = i + 1;
+    btn.addEventListener('click', () => {
+      challengeIdx = i;
+      document.querySelectorAll('.idx-btn').forEach(b => b.classList.remove('sel'));
+      btn.classList.add('sel');
+      updateChallengeSelection();
+    });
+    row.appendChild(btn);
+  }
+}
+
+function updateChallengeSelection() {
+  orangeIdxs = getOrangeIndices(challengeType, challengeIdx);
+  greenIdxs  = (challengeType !== 'preset') ? getGreenIndices(orangeIdxs) : [];
+
+  const labels = {
+    row: `Row ${challengeIdx + 1}`,
+    column: `Column ${challengeIdx + 1}`,
+    square: `Box ${challengeIdx + 1}`,
+    preset: 'all preset cells'
+  };
+  document.getElementById('challengeHint').textContent =
+    `Victor challenges ${labels[challengeType]} — ${[...orangeIdxs, ...greenIdxs].length} cells will be opened.`;
+
+  renderGrid();
+  buildCommitGrid('commitMiniGrid2', [...orangeIdxs, ...greenIdxs]);
+}
+
+// ── Main action dispatcher ─────────────────────────────
+async function handleAction() {
+  if (phase === 'setup')     await doCommit();
+  else if (phase === 'committed') doChallenge();
+  else if (phase === 'challenge') doReveal();
+  else if (phase === 'revealed') await doVerify();
+  else if (phase === 'verified') await doNextRound();
+}
+
+// ── Phase: Commit ──────────────────────────────────────
+async function doCommit() {
+  setBtn('Computing hashes…', true);
+  setMsg('Peggy is generating a random permutation and computing 81 SHA-256 commitments…');
+  await tick();
+
+  perm     = randomPerm();
+  nonces   = Array.from({length: 81}, randomNonce);
+  permuted = SOLUTION.map(d => perm[d]);
+  hashes   = await Promise.all(permuted.map((d, i) => sha256(`${d}-${nonces[i]}`)));
+
+  phase = 'committed';
+  renderPermMap();
+  buildCommitGrid('commitMiniGrid');
+  renderGrid();
+  showPanel('panelCommitted');
+  updatePhaseBar();
+  setMsg('Peggy committed her permuted solution. Victor holds 81 hash envelopes — he cannot see the digits inside.');
+  setBtn('Victor Chooses a Challenge →');
+  showReset(true);
+}
+
+// ── Phase: Challenge ───────────────────────────────────
+function doChallenge() {
+  phase = 'challenge';
+  challengeType = 'row';
+  challengeIdx  = 0;
+
+  // Reset type buttons
+  document.querySelectorAll('.ctype-btn').forEach(b => b.classList.remove('sel'));
+  document.querySelector('[data-t="row"]').classList.add('sel');
+
+  rebuildIndexRow();
+  updateChallengeSelection();  // sets orangeIdxs, greenIdxs, calls renderGrid
+
+  showPanel('panelChallenge');
+  updatePhaseBar();
+  setMsg('Victor selects which row, column, box, or preset cells Peggy must open. Choose below, then click <strong>Challenge →</strong>.');
+  setBtn('Challenge →');
+}
+
+// ── Phase: Reveal ──────────────────────────────────────
+function doReveal() {
+  phase = 'revealed';
+  renderGrid();
+  showPanel('panelRevealed');
+  updatePhaseBar();
+
+  const allRevealed = [...new Set([...orangeIdxs, ...greenIdxs])];
+  const tbody = document.getElementById('revealedBody');
+  tbody.innerHTML = '';
+  allRevealed.forEach(i => {
+    const r  = Math.floor(i / 9) + 1, c = (i % 9) + 1;
+    const tr = document.createElement('tr');
+    tr.className = greenIdxs.includes(i) ? 'reveal-row-green' : 'reveal-row-orange';
+    tr.innerHTML =
+      `<td>(${r},${c})</td>` +
+      `<td>${permuted[i]}</td>` +
+      `<td>${nonces[i].slice(0, 10)}…</td>` +
+      `<td>${hashes[i].slice(0, 10)}…</td>`;
+    tbody.appendChild(tr);
+  });
+
+  const typeLabel = {row:'Row', column:'Column', square:'Box', preset:'Presets'}[challengeType];
+  const idxLabel  = challengeType === 'preset' ? '' : ` ${challengeIdx + 1}`;
+  setMsg(`Peggy opened ${allRevealed.length} commitments for <strong>${typeLabel}${idxLabel}</strong>. Victor can now verify.`);
+  setBtn('Verify →');
+}
+
+// ── Phase: Verify ──────────────────────────────────────
+async function doVerify() {
+  setBtn('Verifying…', true);
+  await tick();
+
+  const allRevealed = [...new Set([...orangeIdxs, ...greenIdxs])];
+
+  // 1. Hash check
+  let hashOk = true;
+  for (const i of allRevealed) {
+    const expected = await sha256(`${permuted[i]}-${nonces[i]}`);
+    if (expected !== hashes[i]) { hashOk = false; break; }
+  }
+
+  // 2. Distinct digits in the challenged group
+  let distinctOk = true;
+  if (challengeType !== 'preset') {
+    const vals = orangeIdxs.map(i => permuted[i]);
+    distinctOk = vals.length === 9 && new Set(vals).size === 9;
+  }
+
+  // 3. Permutation consistency for green cells
+  let consistOk = true;
+  for (const gi of greenIdxs) {
+    const pd = PRESET[gi];
+    const matching = orangeIdxs.find(ci => PRESET[ci] === pd);
+    if (matching !== undefined && permuted[gi] !== permuted[matching]) {
+      consistOk = false; break;
+    }
+  }
+
+  const allOk = hashOk && distinctOk && consistOk;
+  rounds++;
+  phase = 'verified';
+  renderGrid();
+  updatePhaseBar();
+
+  // Build check list
+  const checks = [
+    { ok: hashOk,    label: `Hash verification — all ${allRevealed.length} match` },
+    ...(challengeType !== 'preset'
+      ? [{ ok: distinctOk, label: 'Distinct digits — all 9 present, no duplicates' }]
+      : []),
+    ...(greenIdxs.length > 0
+      ? [{ ok: consistOk, label: 'Permutation consistency — preset digits agree' }]
+      : [])
+  ];
+  const checksEl = document.getElementById('verifyChecks');
+  checksEl.innerHTML = checks.map(ch =>
+    `<div class="verify-check ${ch.ok ? 'check-ok' : 'check-fail'}">
+       <span class="check-icon">${ch.ok ? '✓' : '✗'}</span>
+       <span>${ch.label}</span>
+     </div>`
+  ).join('');
+
+  // Confidence
+  const conf   = (1 - Math.pow(26 / 27, rounds)) * 100;
+  const confStr = conf >= 99.99 ? '>99.99' : conf.toFixed(2);
+  document.getElementById('statRounds').textContent = rounds;
+  document.getElementById('statConf').textContent   = confStr + '%';
+  document.getElementById('confBar').style.width    = Math.min(conf, 100).toFixed(2) + '%';
+
+  showPanel('panelVerified');
+
+  if (allOk) {
+    setMsg(`Round ${rounds} passed. After ${rounds} round${rounds > 1 ? 's' : ''}, Victor's confidence is <strong>${confStr}%</strong>.`);
+    setBtn('Next Round →');
+  } else {
+    setMsg('<strong style="color:#c44444;">Verification failed — Peggy appears to be cheating!</strong>');
+    setBtn('Reset');
+  }
+}
+
+// ── Phase: Next round ──────────────────────────────────
+async function doNextRound() {
+  perm = nonces = hashes = permuted = null;
+  orangeIdxs = []; greenIdxs = [];
+  await doCommit();
+}
+
+// ── Reset ──────────────────────────────────────────────
+function resetDemo() {
+  phase = 'setup';
+  perm = nonces = hashes = permuted = null;
+  orangeIdxs = []; greenIdxs = [];
+  rounds = 0;
+
+  document.getElementById('statRounds').textContent = '0';
+  document.getElementById('statConf').textContent   = '—';
+  document.getElementById('confBar').style.width    = '0%';
+
+  renderGrid();
+  showPanel('panelSetup');
+  updatePhaseBar();
+  setMsg('Click <strong>Begin Protocol</strong> to start a round.');
+  setBtn('Begin Protocol');
+  showReset(false);
+}
+
+// ── Utility ────────────────────────────────────────────
+function tick() { return new Promise(r => setTimeout(r, 40)); }
+
+// ── Init ───────────────────────────────────────────────
+buildGrid();
+renderGrid();
+updatePhaseBar();
+initChallengeControls();
+</script>
+
+</body>
+</html>

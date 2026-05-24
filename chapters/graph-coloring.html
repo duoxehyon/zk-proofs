@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Graph Coloring — ZK Proofs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body, {
+      delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '$', right: '$', display: false}
+      ],
+      throwOnError: false
+    });"></script>
+</head>
+<body>
+
+<div class="overlay" id="overlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <a href="../index.html" class="sidebar-logo">
+    <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+      <polygon points="10,1 19,5.5 19,14.5 10,19 1,14.5 1,5.5"
+               stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      <text x="10" y="13.5" text-anchor="middle" fill="currentColor"
+            font-size="6.5" font-weight="700" font-family="monospace">ZK</text>
+    </svg>
+    <span class="sidebar-logo-text">ZK Proofs</span>
+  </a>
+
+  <nav class="sidebar-nav">
+    <a href="../index.html">Introduction</a>
+
+    <div class="nav-group">Core Concepts</div>
+    <span class="nav-soon">The Three Properties</span>
+    <span class="nav-soon">Interactive Proofs</span>
+
+    <div class="nav-group">Protocols</div>
+    <span class="nav-soon">Schnorr Protocol</span>
+    <a href="alibaba.html">Ali Baba Cave</a>
+
+    <div class="nav-group">Proof Systems</div>
+    <span class="nav-soon">zkSNARKs</span>
+    <span class="nav-soon">zkSTARKs</span>
+
+    <div class="nav-group">Applications</div>
+    <span class="nav-soon">Real-World Uses</span>
+
+    <div class="nav-group">Interactive</div>
+    <div class="nav-accordion" data-key="interactive">
+      <button class="nav-accordion-btn">
+        <span>Demos</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" class="nav-accordion-icon">
+          <path d="M3 2l4 3-4 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div class="nav-accordion-items">
+        <a href="graph-coloring.html" class="nav-child">Graph Coloring</a>
+        <a href="../zkp.html" class="nav-child">Sudoku</a>
+        <a href="alibaba.html" class="nav-child">Ali Baba Cave</a>
+      </div>
+    </div>
+
+    <div class="nav-group">Resources</div>
+    <span class="nav-soon">Further Reading</span>
+  </nav>
+</aside>
+
+<div class="main" id="main">
+
+  <header class="topbar">
+    <button class="toggle-btn" id="toggleBtn" aria-label="Toggle sidebar">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none"
+           stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <line x1="1" y1="3.5"  x2="14" y2="3.5"/>
+        <line x1="1" y1="7.5"  x2="14" y2="7.5"/>
+        <line x1="1" y1="11.5" x2="14" y2="11.5"/>
+      </svg>
+    </button>
+    <span class="topbar-crumb">Interactive · Graph Coloring</span>
+  </header>
+
+  <div class="content">
+
+    <div class="page-meta">Interactive · Demos</div>
+
+    <h1>Graph Coloring</h1>
+    <p>
+      Graph 3-coloring is the classic example used to explain zero-knowledge proofs. It is simple
+      enough to understand in minutes, yet rich enough to illustrate every important property of
+      the ZKP model. By the end of this page you will understand exactly what "zero-knowledge"
+      means, why the proof is sound, and why the prover leaks nothing at all.
+    </p>
+
+    <!-- ── 1. The Problem ─────────────────────────────────────── -->
+    <h2>The Problem</h2>
+    <p>
+      A <strong>graph</strong> is a set of nodes connected by edges. A <strong>3-coloring</strong>
+      assigns one of three colors to every node such that no two nodes connected by an edge share
+      the same color.
+    </p>
+    <p>
+      Finding a valid 3-coloring is an NP-complete problem — there is no known efficient algorithm
+      that works for arbitrary graphs. Verifying a coloring, however, is trivial: just check every
+      edge. This asymmetry is exactly what ZKPs exploit.
+    </p>
+    <div class="callout note">
+      <div class="callout-label">Why this matters</div>
+      Any NP problem can be reduced to 3-coloring in polynomial time. That means a ZKP for graph
+      coloring is, in principle, a ZKP for <em>any</em> NP statement.
+    </div>
+
+    <!-- ── 2. The Setup ───────────────────────────────────────── -->
+    <h2>The Setup</h2>
+    <p>
+      Two parties are involved:
+    </p>
+    <ul>
+      <li><strong>Alice (Verifier)</strong> — has a graph and wants to know whether it is 3-colorable.</li>
+      <li><strong>Bob (Prover)</strong> — claims he has a valid 3-coloring but refuses to reveal it before being paid.</li>
+    </ul>
+    <p>
+      The goal: Bob convinces Alice he has the solution, without Alice learning a single thing about
+      what the coloring actually is.
+    </p>
+
+    <!-- ── 3. The Protocol ────────────────────────────────────── -->
+    <h2>The Protocol</h2>
+    <p>Each round of the proof has three steps.</p>
+
+    <h3>Step 1 — Commit</h3>
+    <p>
+      Bob takes his valid coloring and <strong>randomly permutes the three colors</strong>. If his
+      original coloring used red/blue/green, he might swap so that red→green, blue→red, green→blue.
+      The permuted coloring is still valid — only the labels changed.
+    </p>
+    <p>
+      He then <strong>commits</strong> to the permuted coloring by placing a cryptographic lock
+      on each node. Alice sees only locked nodes — she knows a commitment exists for each node but
+      cannot see the colors underneath.
+    </p>
+
+    <h3>Step 2 — Challenge</h3>
+    <p>
+      Alice picks any edge — any pair of adjacent nodes — and asks Bob to reveal the colors at
+      both endpoints.
+    </p>
+
+    <h3>Step 3 — Reveal</h3>
+    <p>
+      Bob opens both locks. Alice checks that the two revealed colors are different.
+      If they are, she has seen one valid edge. The rest of the graph remains hidden.
+    </p>
+    <p>
+      This process repeats from Step 1, with Bob using a <em>fresh random permutation</em> each round.
+    </p>
+
+    <!-- ── 4. Interactive Demo ────────────────────────────────── -->
+    <h2>Try It Yourself</h2>
+    <p>
+      The graph below has 5 nodes and 6 edges. It is 3-colorable (you can see the solution in the
+      first step). Click through each stage of one round of the protocol.
+    </p>
+
+    <figure>
+    <section class="demo-section">
+      <div class="demo-inner">
+        <div class="demo-body">
+          <div class="demo-graph-wrap">
+            <svg id="demoSVG" viewBox="0 0 380 310"
+                 aria-label="Interactive graph coloring proof">
+              <g id="demoEdges"></g>
+              <g id="demoNodes"></g>
+            </svg>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-stats">
+              <div class="demo-stat">
+                <div class="demo-stat-value" id="statRounds">0</div>
+                <div class="demo-stat-label">Rounds</div>
+              </div>
+              <div class="demo-stat">
+                <div class="demo-stat-value" id="statConf">—</div>
+                <div class="demo-stat-label">Confidence</div>
+              </div>
+            </div>
+            <div class="demo-progress">
+              <div class="demo-pip active" id="pip0"></div>
+              <div class="demo-pip" id="pip1"></div>
+              <div class="demo-pip" id="pip2"></div>
+            </div>
+            <p class="demo-msg" id="demoMsg"></p>
+            <div class="demo-actions">
+              <button class="demo-action-btn" id="demoBtn">Commit</button>
+              <button class="demo-again-btn" id="demoReset" style="display:none">Reset</button>
+            </div>
+          </div>
+        </div>
+        <p class="demo-caption"><strong>Figure 1.</strong> &ensp;Interactive simulation of one round of the graph 3-coloring ZKP. In the <em>commit</em> phase all nodes are locked under a cryptographic commitment; Alice selects an edge as a challenge and Bob opens only those two commitments. Each round uses a fresh random permutation of the three colors.</p>
+      </div>
+    </section>
+    </figure>
+
+    <!-- ── 5. Cryptographic Commitments ──────────────────────── -->
+    <h2>Cryptographic Commitments</h2>
+    <p>
+      The "hat over a node" from the physical intuition is implemented using a <strong>hash
+      function</strong>. Bob commits to the color of node $i$ by publishing:
+    </p>
+    $$\text{commitment}_i = H\!\left(\,\text{color}_i \;\|\; \text{nonce}_i\,\right)$$
+    <p>
+      where $\text{nonce}_i$ is a large random string chosen fresh every round,
+      and $H$ is a cryptographic hash (e.g. SHA-256). The nonce prevents Alice from
+      brute-forcing the color: even though there are only three possible colors, the commitment
+      for $\text{red}$ is different every round.
+    </p>
+    <p>
+      When Bob reveals a node, he discloses <code>(color, nonce)</code>. Alice recomputes the hash
+      and checks it matches the commitment she received earlier. Bob cannot retroactively change a
+      color — the commitment is <em>binding</em>. Alice cannot learn anything from the commitment
+      alone — it is <em>hiding</em>.
+    </p>
+    <p>A concrete example for one round might look like this:</p>
+    <pre><code><span class="comment">-- Permuted coloring (private to Bob) --</span>
+Node  Color    Nonce          Commitment (SHA-256 prefix)
+  1   green    x7fKqmNpRt     a3f92c1d...
+  2   red      bYw3ZoLsVk     7e841bb0...
+  3   blue     hJ6nPcXrWq     2d093fe4...
+  4   green    mQ9sTuYdEa     c1a57830...
+  5   red      kR2vBxFgNz     88f4120e...
+
+<span class="comment">-- Alice challenges edge (1, 2) --</span>
+Bob reveals: node 1 → green / x7fKqmNpRt
+             node 2 → red   / bYw3ZoLsVk
+
+Alice checks: H("green" || "x7fKqmNpRt") == a3f92c1d... ✓
+              H("red"   || "bYw3ZoLsVk") == 7e841bb0... ✓
+              green ≠ red ✓</code></pre>
+
+    <!-- ── 6. Why Is This Zero-Knowledge? ─────────────────────── -->
+    <h2>Why Is This Zero-Knowledge?</h2>
+    <p>
+      A valid ZKP must satisfy three properties.
+    </p>
+
+    <h3>Completeness</h3>
+    <p>
+      If Bob genuinely has a valid coloring, every edge he is challenged on will have two different
+      colors. Alice will always accept. An honest prover always convinces an honest verifier.
+    </p>
+
+    <h3>Soundness</h3>
+    <p>
+      Suppose Bob is cheating and has no valid coloring. Then at least one edge in his graph has
+      two nodes of the same color. No matter how clever his permutation is, that edge is still
+      broken. If Alice happens to challenge that edge, she catches him immediately.
+    </p>
+    <p>
+      With $m$ edges total, the probability of Alice <em>not</em> catching a cheater in a
+      single round is at most $\tfrac{m-1}{m}$. After $k$ independent rounds:
+    </p>
+    $$P(\text{not caught after } k \text{ rounds}) \;\leq\; \left(\frac{m-1}{m}\right)^{\!k}$$
+    <p>
+      For the 5-node graph above (6 edges), after 100 rounds this is below $10^{-7}$.
+      After 1000 rounds it is negligible.
+    </p>
+
+    <h3>Zero-Knowledge</h3>
+    <p>
+      This is the subtle and beautiful part. After seeing many rounds, what does Alice actually
+      learn about Bob's coloring?
+    </p>
+    <p>
+      <strong>Nothing.</strong> In each round Bob uses a fresh random permutation of the colors.
+      The two nodes Alice sees are always two different colors — but she already knew that any valid
+      coloring of an edge would show two different colors. She sees <em>(red, blue)</em> in one
+      round, <em>(green, red)</em> in the next — none of these pairs tell her anything about the
+      original assignment, because the mapping between the original colors and the current colors
+      changes every round unpredictably.
+    </p>
+    <p>
+      More formally, Alice could have <em>simulated</em> the entire transcript herself: just pick
+      a random edge, pick two different colors for its endpoints, and write it down. The result is
+      statistically indistinguishable from a real interaction with Bob. Because Alice could generate
+      this herself, the interaction conveys no information about the actual solution.
+    </p>
+    <div class="callout note">
+      <div class="callout-label">The simulator argument</div>
+      The standard definition of zero-knowledge says: a protocol is zero-knowledge if there exists
+      a <em>simulator</em> — a program that, with no access to the prover's secret, produces a
+      transcript that looks identical (in distribution) to a real transcript. The color permutation
+      is exactly that simulator here.
+    </div>
+
+    <!-- ── 7. How Many Rounds? ────────────────────────────────── -->
+    <h2>How Many Rounds?</h2>
+    <p>
+      The table below shows the soundness error (probability a cheating prover survives) for
+      the 6-edge graph after increasing numbers of rounds.
+    </p>
+    <table class="math-table">
+      <thead><tr><th>Rounds ($k$)</th><th>Soundness error $\left(\tfrac{5}{6}\right)^k$</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>83.3%</td></tr>
+        <tr><td>10</td><td>16.2%</td></tr>
+        <tr><td>30</td><td>0.7%</td></tr>
+        <tr><td>60</td><td>0.05%</td></tr>
+        <tr><td>100</td><td>0.0009%</td></tr>
+        <tr><td>200</td><td>$\approx 10^{-7}$</td></tr>
+      </tbody>
+    </table>
+    <p>
+      In practice, interactive ZKPs are run for enough rounds to push the soundness error below
+      any desired threshold. For real-world proofs of large graphs (or NP problems reduced to
+      graph coloring), the number of required rounds grows with the number of edges, but the
+      per-round cost is small.
+    </p>
+
+    <div class="page-nav">
+      <a href="../index.html">← Introduction</a>
+    </div>
+
+  </div>
+</div>
+
+<script src="../js/sidebar.js"></script>
+<script src="../js/demo.js"></script>
+</body>
+</html>

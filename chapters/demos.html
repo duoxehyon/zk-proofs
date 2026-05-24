@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Demos — ZK Proofs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+
+<div class="overlay" id="overlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <a href="../index.html" class="sidebar-logo">
+    <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+      <polygon points="10,1 19,5.5 19,14.5 10,19 1,14.5 1,5.5"
+               stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      <text x="10" y="13.5" text-anchor="middle" fill="currentColor"
+            font-size="6.5" font-weight="700" font-family="monospace">ZK</text>
+    </svg>
+    <span class="sidebar-logo-text">ZK Proofs</span>
+  </a>
+
+  <nav class="sidebar-nav">
+    <a href="../index.html">Introduction</a>
+
+    <div class="nav-group">Core Concepts</div>
+    <span class="nav-soon">The Three Properties</span>
+    <span class="nav-soon">Interactive Proofs</span>
+
+    <div class="nav-group">Protocols</div>
+    <span class="nav-soon">Schnorr Protocol</span>
+    <span class="nav-soon">Ali Baba Cave</span>
+
+    <div class="nav-group">Proof Systems</div>
+    <span class="nav-soon">zkSNARKs</span>
+    <span class="nav-soon">zkSTARKs</span>
+
+    <div class="nav-group">Applications</div>
+    <span class="nav-soon">Real-World Uses</span>
+
+    <div class="nav-group">Interactive</div>
+    <a href="demos.html">Demos</a>
+
+    <div class="nav-group">Resources</div>
+    <span class="nav-soon">Further Reading</span>
+  </nav>
+</aside>
+
+<div class="main" id="main">
+
+  <header class="topbar">
+    <button class="toggle-btn" id="toggleBtn" aria-label="Toggle sidebar">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none"
+           stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <line x1="1" y1="3.5"  x2="14" y2="3.5"/>
+        <line x1="1" y1="7.5"  x2="14" y2="7.5"/>
+        <line x1="1" y1="11.5" x2="14" y2="11.5"/>
+      </svg>
+    </button>
+    <span class="topbar-crumb">Demos</span>
+  </header>
+
+  <div class="content">
+    <div class="page-meta">Interactive · Demos</div>
+
+    <h1>Demos</h1>
+    <p>Interactive explorations of zero-knowledge proof concepts. Step through the protocol yourself to build intuition for how proofs work without leaking information.</p>
+
+    <!-- ── Graph Coloring Demo ──────────────────────────────── -->
+    <section class="demo-section">
+      <div class="demo-inner">
+
+        <div class="demo-header">
+          <span class="demo-eyebrow">Interactive Example</span>
+          <h2 class="demo-title">Graph 3-Coloring</h2>
+          <p class="demo-desc">
+            A graph is <em>3-colorable</em> if every node can be assigned one of three colors so
+            no two adjacent nodes share a color. The prover claims to know such a coloring.
+            In a ZKP, they prove it — edge by edge — without ever revealing the full solution.
+          </p>
+        </div>
+
+        <div class="demo-body">
+          <div class="demo-graph-wrap">
+            <svg id="demoSVG" viewBox="0 0 380 310"
+                 aria-label="Interactive graph coloring proof">
+              <g id="demoEdges"></g>
+              <g id="demoNodes"></g>
+            </svg>
+          </div>
+
+          <div class="demo-panel">
+            <div class="demo-progress">
+              <div class="demo-pip active" id="pip0"></div>
+              <div class="demo-pip" id="pip1"></div>
+              <div class="demo-pip" id="pip2"></div>
+            </div>
+            <p class="demo-msg" id="demoMsg"></p>
+            <div class="demo-actions">
+              <button class="demo-action-btn" id="demoBtn">Commit</button>
+              <button class="demo-again-btn" id="demoReset" style="display:none">Run Again</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script src="../js/sidebar.js"></script>
+<script src="../js/demo.js"></script>
+</body>
+</html>
