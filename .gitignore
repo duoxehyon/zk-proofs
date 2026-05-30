@@ -1,7 +1,10 @@
 # dependencies
 node_modules/
 
-# astro cache (dist/ is committed for GitHub Pages)
+# old build output (site is built to docs/ for GitHub Pages)
+dist/
+
+# astro cache (docs/ is committed for GitHub Pages)
 .astro/
 
 # env

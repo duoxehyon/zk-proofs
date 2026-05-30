@@ -8,19 +8,25 @@ An interactive guide to zero-knowledge proofs — covering theory, protocols, an
 
 ## Pages (so far)
 
-- **Introduction** (`index.html`)
-- **Graph Coloring** (`chapters/graph-coloring.html`)
-- **Sudoku ZKP** (`zkp.html`)
-- **Ali Baba Cave** (`chapters/alibaba.html`)
+- **Introduction** (`/`)
+- **Graph Coloring** (`/chapters/graph-coloring/`)
+- **Sudoku ZKP** (`/chapters/sudoku/`)
+- **Ali Baba Cave** (`/chapters/alibaba/`)
 
 ## Running locally
 
 ```bash
 npm install
 npm run dev      # dev server at http://localhost:4321
-npm run build    # production build → dist/
+npm run build    # production build → docs/
 npm run preview  # preview the built site
 ```
+
+## Deploying to GitHub Pages
+
+1. Run `npm run build` after changing source files.
+2. Commit and push the `docs/` folder.
+3. In repo **Settings → Pages**, set source to **Deploy from branch**, branch **`main`**, folder **`/docs`**.
 
 ## Authors
 

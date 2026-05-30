@@ -1,5 +1,8 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import { home } from '../../utils/paths.ts';
+
+const pathname = Astro.url.pathname;
 
 // Sections with LaTeX use set:html so Astro doesn't try to parse {} as expressions.
 const postDemoHtml = String.raw`
@@ -117,10 +120,6 @@ Alice checks: H("green" || "x7fKqmNpRt") == a3f92c1d... ✓
       graph coloring), the number of required rounds grows with the number of edges, but the
       per-round cost is small.
     </p>
-
-    <div class="page-nav">
-      <a href="/">← Introduction</a>
-    </div>
 `;
 ---
 
@@ -251,6 +250,10 @@ Alice checks: H("green" || "x7fKqmNpRt") == a3f92c1d... ✓
 
     <!-- Sections 5-7 contain LaTeX — rendered via set:html to avoid {} conflicts -->
     <Fragment set:html={postDemoHtml} />
+
+    <div class="page-nav">
+      <a href={home(pathname)}>← Introduction</a>
+    </div>
 
   </div>
 </BaseLayout>

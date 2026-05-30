@@ -24,9 +24,13 @@ overlay?.addEventListener('click', () => {
 });
 
 // Active link + auto-open accordion if a child is active
-const page = location.pathname.split('/').pop() || 'index.html';
+const norm = (p) => p.replace(/\/$/, '') || '/';
+const current = norm(location.pathname);
+
 document.querySelectorAll('.sidebar-nav a').forEach(a => {
-  if (a.getAttribute('href')?.split('/').pop() === page) {
+  const href = a.getAttribute('href');
+  if (!href || href.startsWith('http')) return;
+  if (norm(new URL(href, location.href).pathname) === current) {
     a.classList.add('active');
     // open parent accordion if inside one
     const acc = a.closest('.nav-accordion');

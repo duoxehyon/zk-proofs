@@ -1,5 +1,8 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import { page } from '../../utils/paths.ts';
+
+const pathname = Astro.url.pathname;
 
 // Sections with LaTeX use set:html so Astro doesn't try to parse {} as expressions.
 const postDemoHtml = String.raw`
@@ -71,11 +74,6 @@ const postDemoHtml = String.raw`
       Real-world ZKPs (zkSNARKs, zkSTARKs) achieve near-zero soundness error in a <em>single
       non-interactive round</em>, using cryptographic hardness rather than repetition.
     </p>
-
-    <div class="page-nav">
-      <a href="/chapters/graph-coloring">← Graph Coloring</a>
-      <a href="/zkp" class="next">Sudoku →</a>
-    </div>
 `;
 ---
 
@@ -422,6 +420,11 @@ const postDemoHtml = String.raw`
 
     <!-- "Why ZK" and "How Many Rounds" sections contain LaTeX — rendered via set:html -->
     <Fragment set:html={postDemoHtml} />
+
+    <div class="page-nav">
+      <a href={page('chapters/graph-coloring', pathname)}>← Graph Coloring</a>
+      <a href={page('chapters/sudoku', pathname)} class="next">Sudoku →</a>
+    </div>
 
   </div>
 </BaseLayout>
