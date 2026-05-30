@@ -1,0 +1,127 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Sudoku ZKP — ZK Proofs</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet"><link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+<link rel="stylesheet" href="/_astro/zkp.DkEgSkvw.css"></head> <body> <div class="overlay" id="overlay"></div> <aside class="sidebar" id="sidebar"> <a href="/" class="sidebar-logo"> <svg width="18" height="18" viewBox="0 0 20 20" fill="none"> <polygon points="10,1 19,5.5 19,14.5 10,19 1,14.5 1,5.5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></polygon> <text x="10" y="13.5" text-anchor="middle" fill="currentColor" font-size="6.5" font-weight="700" font-family="monospace">ZK</text> </svg> <span class="sidebar-logo-text">ZK Proofs</span> </a> <nav class="sidebar-nav"> <a href="/">Introduction</a> <div class="nav-group">Core Concepts</div> <span class="nav-soon">The Three Properties</span> <span class="nav-soon">Interactive Proofs</span> <div class="nav-group">Protocols</div> <span class="nav-soon">Schnorr Protocol</span> <div class="nav-group">Proof Systems</div> <span class="nav-soon">zkSNARKs</span> <span class="nav-soon">zkSTARKs</span> <div class="nav-group">Applications</div> <span class="nav-soon">Real-World Uses</span> <div class="nav-group">Interactive</div> <div class="nav-accordion" data-key="interactive"> <button class="nav-accordion-btn"> <span>Demos</span> <svg width="10" height="10" viewBox="0 0 10 10" fill="none" class="nav-accordion-icon"> <path d="M3 2l4 3-4 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path> </svg> </button> <div class="nav-accordion-items"> <a href="/chapters/graph-coloring" class="nav-child">Graph Coloring</a> <a href="/zkp" class="nav-child">Sudoku</a> <a href="/chapters/alibaba" class="nav-child">Ali Baba Cave</a> </div> </div> <div class="nav-group">Resources</div> <span class="nav-soon">Further Reading</span> </nav> </aside> <div class="main" id="main"> <header class="topbar"> <button class="toggle-btn" id="toggleBtn" aria-label="Toggle sidebar"> <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"> <line x1="1" y1="3.5" x2="14" y2="3.5"></line> <line x1="1" y1="7.5" x2="14" y2="7.5"></line> <line x1="1" y1="11.5" x2="14" y2="11.5"></line> </svg> </button> <span class="topbar-crumb">Interactive · Sudoku ZKP</span> </header> <div class="content"><div class="page-meta">Interactive · Demos</div><h1>Sudoku Zero-Knowledge Proof</h1><p>
+Sudoku solutions can be proven via zero-knowledge proof. If Peggy has a solution to
+      Victor's puzzle, she can convince him her solution is valid without ever revealing
+      the solution — or any information about it beyond its existence.
+</p><!-- ── 1. The Setup ── --><h2>The Setup</h2><p>Two parties:</p><ul><li><strong>Peggy (Prover)</strong> — has a valid solution to a Sudoku puzzle.</li><li><strong>Victor (Verifier)</strong> — has the puzzle and wants proof the solution exists,
+          but Peggy won't reveal it without payment.</li></ul><!-- ── 2. The Protocol (LaTeX) ── -->
+    <h2>The Protocol</h2>
+    <p>
+      The Sudoku ZKP works very similarly to the graph coloring proof. Because every valid
+      Sudoku solution remains valid under any relabeling of the digits 1–9, Peggy can hide her
+      solution simply by applying a random <strong>digit permutation</strong>
+      $\sigma : \{1,\ldots,9\} \to \{1,\ldots,9\}$ before committing.
+    </p>
+
+    <h3>Step 1 — Commit</h3>
+    <p>
+      Peggy permutes her solution with a freshly chosen $\sigma$ and then commits to every
+      cell using a cryptographic hash with a random nonce:
+    </p>
+    $$\text{commit}_{i} = \text{SHA-256}\!\left(\,\sigma(d_i) \;\|\; r_i\,\right)$$
+    <p>
+      where $d_i$ is the original digit at cell $i$ and $r_i$ is a large random string
+      chosen fresh every round. She sends all 81 commitments to Victor. Victor sees 81
+      sealed envelopes — he cannot open any of them.
+    </p>
+
+    <h3>Step 2 — Challenge</h3>
+    <p>
+      Victor randomly picks one of <strong>27 challenge groups</strong>: any of the 9 rows,
+      9 columns, or 9 subsquares. He may also ask Peggy to reveal all <em>preset</em> cells
+      to verify permutation consistency. Each group must contain digits 1–9 exactly once in
+      any valid solution.
+    </p>
+
+    <h3>Step 3 — Reveal &amp; Verify</h3>
+    <p>
+      Peggy opens the 9 commitments for the challenged group, disclosing the permuted
+      digit and nonce for each. Victor verifies three things:
+    </p>
+    <ul>
+      <li>Every hash matches: $\text{SHA-256}(\sigma(d_i) \| r_i) = \text{commit}_i$</li>
+      <li>The 9 revealed digits are all distinct (1–9, each exactly once)</li>
+      <li>For preset cells: the permutation $\sigma$ is consistent across the board</li>
+    </ul>
+    <p>
+      If Peggy is cheating, at least one row, column, or subsquare contains a duplicate.
+      The probability of Victor missing it in a single round is at most $\tfrac{26}{27}$.
+      After $k$ independent rounds:
+    </p>
+    $$P(\text{not caught after } k \text{ rounds}) \;\leq\; \left(\frac{26}{27}\right)^{\!k}$$
+
+    <div class="callout note">
+      <div class="callout-label">Why This Is Zero-Knowledge</div>
+      Every round uses a fresh random permutation. The 9 digits Victor sees are just some
+      arrangement of 1–9 — information he already knew any valid group must contain.
+      He learns nothing about the actual digit assignment. A simulator could produce
+      identically distributed transcripts without ever seeing the real solution.
+    </div>
+<!-- ── 3. Interactive Demo ── --><h2>Try It Yourself</h2><p>
+The demo below runs a real instance of the protocol. You act as both Peggy and Victor.
+      Hashes are genuine SHA-256 digests computed in your browser via the Web Crypto API.
+</p><figure><section class="demo-section" id="sudokuDemo" aria-label="Interactive Sudoku ZKP demo"><div class="demo-inner"><div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;"><div><span class="demo-eyebrow">Interactive Demo</span><div class="demo-title">Sudoku ZKP Protocol</div><p class="demo-desc" id="demoMsg">Click <strong>Begin Protocol</strong> to start a round.</p></div><div class="demo-stats" style="margin:0; border:none; padding:0; gap:1.5rem; flex-shrink:0;"><div class="demo-stat"><div class="demo-stat-value" id="statRounds">0</div><div class="demo-stat-label">Rounds</div></div><div class="demo-stat"><div class="demo-stat-value" id="statConf">—</div><div class="demo-stat-label">Confidence</div></div></div></div><div class="phase-bar"><div class="phase-step current" id="ps0"></div><div class="phase-step" id="ps1"></div><div class="phase-step" id="ps2"></div><div class="phase-step" id="ps3"></div><div class="phase-step" id="ps4"></div></div><div class="sudoku-demo-body"><div class="sudoku-left"><div class="sudoku-wrap"><div id="sudokuGridWrap"></div></div></div><div class="sudoku-right"><div id="panelSetup"><div class="info-panel"><div class="info-panel-label">The Problem</div><p style="font-size:0.83rem; color:var(--text); line-height:1.7; margin:0;">
+Victor has this Sudoku puzzle (highlighted cells in
+<span style="color:var(--accent); font-weight:600;">indigo</span> are the presets).
+                  Peggy claims to have a valid solution and will prove it
+                  without showing a single digit of her answer.
+</p></div></div><div id="panelCommitted" style="display:none;"><div class="info-panel" style="margin-bottom:0.7rem;"><div class="info-panel-label">Peggy's Digit Permutation (secret)</div><div class="perm-map" id="permMap"></div></div><div class="info-panel"><div class="info-panel-label">81 SHA-256 Commitments sent to Victor</div><div class="commit-mini-grid" id="commitMiniGrid"></div><p style="font-size:0.68rem; color:var(--muted); margin-top:0.45rem; line-height:1.5;">
+Each cell is a SHA-256 hash of <code>permuted_digit‑nonce</code>.
+                  Hover to see the full hash.
+</p></div></div><div id="panelChallenge" style="display:none;"><div class="info-panel"><div class="info-panel-label">Victor's Challenge</div><div class="challenge-type-row" id="ctypeRow"><button class="ctype-btn sel" data-t="row">Row</button><button class="ctype-btn" data-t="column">Column</button><button class="ctype-btn" data-t="square">Box</button><button class="ctype-btn" data-t="preset">Presets</button></div><div class="index-row" id="idxRow"></div><p class="challenge-hint" id="challengeHint">Pick a row for Peggy to open.</p></div><div class="info-panel"><div class="info-panel-label">Commitments (highlighted = will be opened)</div><div class="commit-mini-grid" id="commitMiniGrid2"></div></div></div><div id="panelRevealed" style="display:none;"><div class="info-panel"><div class="info-panel-label">Revealed Values &amp; Nonces</div><div id="revealedTableWrap" style="overflow-y:auto; max-height:220px;"><table class="reveal-table" id="revealedTable"><thead><tr><th>Cell</th><th>Value</th><th>Nonce (prefix)</th><th>Commit (prefix)</th></tr></thead><tbody id="revealedBody"></tbody></table></div><p style="font-size:0.68rem; color:var(--muted); margin-top:0.45rem;"><span style="display:inline-block; width:8px; height:8px; background:rgba(196,100,60,0.3); border-radius:1px; margin-right:4px;"></span>orange = challenged group &nbsp;
+<span style="display:inline-block; width:8px; height:8px; background:rgba(70,160,100,0.3); border-radius:1px; margin-right:4px;"></span>green = consistency check
+</p></div></div><div id="panelVerified" style="display:none;"><div class="info-panel"><div class="info-panel-label">Verification Result</div><div id="verifyChecks"></div><div class="conf-bar-wrap"><div class="conf-bar" id="confBar"></div></div><p style="font-size:0.7rem; color:var(--muted); margin:0; line-height:1.5;">
+Verifier confidence that Peggy has a valid solution (assuming she could be cheating).
+</p></div></div></div></div><div class="demo-actions" style="margin-top:1.2rem;"><button class="demo-action-btn" id="actionBtn" onclick="handleAction()">Begin Protocol</button><button class="demo-again-btn" id="resetBtn" onclick="resetDemo()" style="display:none;">Reset</button></div></div><p class="demo-caption"><strong>Figure 2.</strong> &ensp;Interactive simulation of the Sudoku ZKP protocol.
+        SHA-256 hashes are computed via the Web Crypto API in your browser.
+        Protocol design based on
+<a href="https://manishearth.github.io/blog/2016/08/10/interactive-sudoku-zero-knowledge-proof/">
+Manish Goregaokar's Sudoku ZKP</a>.
+</p></section></figure><!-- Section 4 + page nav contain LaTeX — rendered via set:html -->
+    <!-- ── 4. How Many Rounds? ── -->
+    <h2>How Many Rounds?</h2>
+    <p>
+      With 27 possible challenge groups, the soundness error per round is $\frac{26}{27} \approx 96.3\%$.
+      This decreases exponentially with each round:
+    </p>
+    <table class="math-table">
+      <thead>
+        <tr>
+          <th>Rounds ($k$)</th>
+          <th>Soundness error $\left(\tfrac{26}{27}\right)^k$</th>
+          <th>Verifier confidence</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td>  <td>96.3%</td><td>3.7%</td></tr>
+        <tr><td>10</td> <td>69.0%</td><td>31.0%</td></tr>
+        <tr><td>50</td> <td>15.3%</td><td>84.7%</td></tr>
+        <tr><td>100</td><td>2.3%</td> <td>97.7%</td></tr>
+        <tr><td>200</td><td>0.06%</td><td>99.94%</td></tr>
+        <tr><td>500</td><td>$\approx 10^{-8}$</td><td>$\approx 100\%$</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Compare with graph coloring, which had $\frac{m-1}{m}$ soundness error per round where
+      $m$ is the number of edges. For the classic 6-edge example that was $\frac{5}{6} \approx 83.3\%$
+      per round — much better per-round guarantees. Sudoku's 27 groups give weaker per-round reduction
+      but the protocol applies to a richer, more structured problem.
+    </p>
+
+    <div class="page-nav">
+      <a href="/chapters/graph-coloring">← Graph Coloring</a>
+    </div>
+</div> </div> <script src="/js/sidebar.js"></script> 
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    renderMathInElement(document.body, {
+      delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '$',  right: '$',  display: false}
+      ],
+      throwOnError: false
+    });
+  </script>
+ <script src="/js/sudoku-demo.js"></script> </body> </html>

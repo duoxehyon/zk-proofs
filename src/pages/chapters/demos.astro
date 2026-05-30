@@ -1,0 +1,57 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Demos — ZK Proofs"
+  crumb="Demos"
+  extraScript="/js/demo.js"
+>
+  <div class="content">
+    <div class="page-meta">Interactive · Demos</div>
+
+    <h1>Demos</h1>
+    <p>Interactive explorations of zero-knowledge proof concepts. Step through the protocol yourself to build intuition for how proofs work without leaking information.</p>
+
+    <!-- ── Graph Coloring Demo ──────────────────────────────── -->
+    <section class="demo-section">
+      <div class="demo-inner">
+
+        <div class="demo-header">
+          <span class="demo-eyebrow">Interactive Example</span>
+          <h2 class="demo-title">Graph 3-Coloring</h2>
+          <p class="demo-desc">
+            A graph is <em>3-colorable</em> if every node can be assigned one of three colors so
+            no two adjacent nodes share a color. The prover claims to know such a coloring.
+            In a ZKP, they prove it — edge by edge — without ever revealing the full solution.
+          </p>
+        </div>
+
+        <div class="demo-body">
+          <div class="demo-graph-wrap">
+            <svg id="demoSVG" viewBox="0 0 380 310"
+                 aria-label="Interactive graph coloring proof">
+              <g id="demoEdges"></g>
+              <g id="demoNodes"></g>
+            </svg>
+          </div>
+
+          <div class="demo-panel">
+            <div class="demo-progress">
+              <div class="demo-pip active" id="pip0"></div>
+              <div class="demo-pip" id="pip1"></div>
+              <div class="demo-pip" id="pip2"></div>
+            </div>
+            <p class="demo-msg" id="demoMsg"></p>
+            <div class="demo-actions">
+              <button class="demo-action-btn" id="demoBtn">Commit</button>
+              <button class="demo-again-btn" id="demoReset" style="display:none">Run Again</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </div>
+</BaseLayout>

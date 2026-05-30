@@ -1,0 +1,427 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+// Sections with LaTeX use set:html so Astro doesn't try to parse {} as expressions.
+const postDemoHtml = String.raw`
+    <!-- ── Why ZK? ── -->
+    <h2>Why Is This Zero-Knowledge?</h2>
+
+    <h3>Completeness</h3>
+    <p>
+      An honest Peggy who truly knows the secret word will always succeed. Whatever side Victor
+      calls, she can reach it — directly if she is already there, or through the door otherwise.
+      An honest prover always convinces an honest verifier.
+    </p>
+
+    <h3>Soundness</h3>
+    <p>
+      Suppose Peggy is cheating and does not know the secret word. She cannot open the door, so
+      she is stuck on whichever path she entered. Victor's call is independent and random —
+      there is exactly a $\frac{1}{2}$ probability he calls the side she entered. The probability
+      of a cheater surviving one round is therefore $\frac{1}{2}$. After $k$ rounds:
+    </p>
+    $$P(\text{cheater not caught after } k \text{ rounds}) = \left(\frac{1}{2}\right)^k$$
+
+    <h3>Zero-Knowledge</h3>
+    <p>
+      What does Victor actually learn from a successful round? He shouted a direction, and Peggy
+      emerged from that direction. But he could have <em>simulated</em> this entire transcript
+      himself — pick a random side (A or B), imagine a person coming from that side, write it down.
+      The simulated transcript is statistically indistinguishable from a real interaction.
+    </p>
+    <p>
+      Because Victor could produce the same-looking evidence without ever talking to Peggy,
+      the real interaction conveys <strong>zero information</strong> about the secret word.
+    </p>
+
+    <div class="callout note">
+      <div class="callout-label">Physical Intuition</div>
+      This is the beautiful thing about the Ali Baba Cave: you can hold the protocol
+      in your head without any cryptography. A child could follow along and understand why
+      it works. The magic door is the only cryptographic primitive — and the rest is just
+      spatial logic.
+    </div>
+
+    <!-- ── Rounds table ── -->
+    <h2>How Many Rounds?</h2>
+    <p>
+      The soundness error is exactly $\left(\tfrac{1}{2}\right)^k$ — far better per-round
+      than graph coloring or Sudoku, because there are only two possible challenges.
+    </p>
+    <table class="math-table">
+      <thead>
+        <tr>
+          <th>Rounds ($k$)</th>
+          <th>Soundness error $\left(\tfrac{1}{2}\right)^k$</th>
+          <th>Verifier confidence</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td>  <td>50%</td>     <td>50%</td></tr>
+        <tr><td>5</td>  <td>3.1%</td>    <td>96.9%</td></tr>
+        <tr><td>10</td> <td>0.098%</td>  <td>99.9%</td></tr>
+        <tr><td>20</td> <td>$\approx 10^{-4}$%</td><td>$\approx 100\%$</td></tr>
+        <tr><td>30</td> <td>$\approx 10^{-7}$%</td><td>$\approx 100\%$</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Twenty rounds push the soundness error below one in a million — far faster convergence
+      than the 27-group Sudoku ZKP or even the graph coloring protocol.
+      The trade-off: the cave ZKP is pedagogically perfect but not practical for complex statements.
+      Real-world ZKPs (zkSNARKs, zkSTARKs) achieve near-zero soundness error in a <em>single
+      non-interactive round</em>, using cryptographic hardness rather than repetition.
+    </p>
+
+    <div class="page-nav">
+      <a href="/chapters/graph-coloring">← Graph Coloring</a>
+      <a href="/zkp" class="next">Sudoku →</a>
+    </div>
+`;
+---
+
+<style is:global>
+  /* ── Cave SVG ── */
+  .cave-wrap svg { width: 100%; height: auto; display: block; max-width: 300px; margin: 0 auto; }
+
+  #peggyG { transition: transform 0.75s cubic-bezier(0.34, 1.4, 0.64, 1); }
+  #hlA, #hlB { transition: opacity 0.4s ease; }
+  #doorGlowEl { transition: opacity 0.35s ease; }
+  #callBubble { transition: opacity 0.28s ease; }
+  #labelA, #labelB { transition: fill 0.3s ease; }
+  #peggyLabel { transition: fill 0.2s ease; }
+
+  @keyframes doorPulse {
+    0%, 100% { opacity: 0.55; }
+    50%       { opacity: 1; }
+  }
+  .door-pulsing { animation: doorPulse 0.85s ease-in-out infinite; }
+
+  /* ── Demo layout ── */
+  .cave-demo-body { display: flex; flex-direction: row; align-items: flex-start; gap: 2.5rem; margin-top: 0.5rem; }
+  .cave-left  { flex: 0 0 auto; }
+  .cave-right { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.8rem; }
+
+  /* ── Phase bar ── */
+  .phase-bar { display: flex; gap: 3px; margin-bottom: 1rem; }
+  .phase-step { flex: 1; height: 2px; border-radius: 1px; background: var(--border); transition: background 0.3s; }
+  .phase-step.done    { background: var(--muted); }
+  .phase-step.current { background: var(--accent); }
+
+  /* ── Info panel ── */
+  .info-panel { background: rgba(255,255,255,0.022); border: 1px solid var(--border); border-radius: 4px; padding: 0.85rem 1rem; }
+  .info-panel-label { font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.13em; color: var(--muted); margin-bottom: 0.6rem; }
+
+  /* ── Role badges ── */
+  .role-row { display: flex; gap: 0.9rem; flex-wrap: wrap; }
+  .role-badge { display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; }
+  .role-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .role-dot.peggy  { background: var(--heading); border: 1.5px solid var(--accent); }
+  .role-dot.victor { background: #252534; border: 1.5px solid var(--muted); }
+
+  /* ── Choice reveal ── */
+  .choice-display { display: flex; gap: 1rem; margin-top: 0.5rem; }
+  .choice-box { flex: 1; padding: 0.6rem 0.8rem; background: var(--bg-code); border-radius: 4px; border: 1px solid var(--border); }
+  .choice-box-label { font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 0.3rem; }
+  .choice-box-value { font-family: var(--mono); font-size: 1.1rem; font-weight: 700; color: var(--heading); }
+  .choice-box.hidden .choice-box-value { color: var(--muted); }
+  .choice-box.match  { border-color: #4fa870; }
+  .choice-box.mismatch { border-color: #c44444; }
+
+  /* ── Verify checks ── */
+  .verify-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.83rem; padding: 0.2rem 0; }
+  .v-ok   { color: #4fa870; }
+  .v-fail { color: #c44444; }
+
+  /* ── Confidence bar ── */
+  .conf-bar-wrap { height: 3px; background: var(--border); border-radius: 2px; margin: 0.6rem 0 0.3rem; overflow: hidden; }
+  .conf-bar { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.5s ease; width: 0%; }
+
+  /* ── Mobile ── */
+  @media (max-width: 860px) {
+    .cave-demo-body { flex-direction: column; align-items: center; }
+    .cave-left { width: 100%; max-width: 280px; }
+    .cave-right { width: 100%; }
+  }
+</style>
+
+<BaseLayout
+  title="Ali Baba Cave — ZK Proofs"
+  crumb="Protocols · Ali Baba Cave"
+  useKatex
+  extraScript="/js/alibaba-demo.js"
+>
+  <div class="content">
+
+    <div class="page-meta">Protocols · Demos</div>
+    <h1>The Ali Baba Cave</h1>
+
+    <p>
+      The Ali Baba Cave is the most intuitive introduction to zero-knowledge proofs — a physical
+      metaphor that makes the abstract idea of "proving without revealing" immediately concrete.
+      Originally described by Jean-Jacques Quisquater and others in 1989, it has become the
+      canonical first example of a ZKP.
+    </p>
+
+    <!-- ── The Story ── -->
+    <h2>The Cave</h2>
+    <p>
+      Imagine a cave shaped like a ring, with a single entrance at the front. Inside, the ring
+      splits into two corridors: <strong>Path A</strong> on the left and <strong>Path B</strong>
+      on the right. Both paths lead to the same inner chamber, separated by a magic door in the
+      middle. The door can only be opened by someone who knows the secret word.
+    </p>
+    <p>
+      From the outside, you can only see the entrance — you cannot tell which path anyone
+      inside has taken.
+    </p>
+
+    <!-- ── Setup ── -->
+    <h2>The Setup</h2>
+    <ul>
+      <li><strong>Peggy (Prover)</strong> — knows the secret word that opens the magic door.</li>
+      <li><strong>Victor (Verifier)</strong> — wants to be convinced Peggy knows the word, without
+          learning the word himself.</li>
+    </ul>
+
+    <!-- ── Protocol ── -->
+    <h2>The Protocol</h2>
+    <p>Each round of the proof has three steps.</p>
+
+    <h3>Step 1 — Peggy Enters</h3>
+    <p>
+      Victor waits outside. Peggy walks into the cave and randomly goes down <em>either</em>
+      path A or path B. Victor cannot see which one she chose.
+    </p>
+
+    <h3>Step 2 — Victor Calls</h3>
+    <p>
+      Victor walks to the entrance (but not inside) and shouts which side he wants Peggy
+      to come back from: <em>"Come out from A!"</em> or <em>"Come out from B!"</em> — chosen
+      randomly with equal probability.
+    </p>
+
+    <h3>Step 3 — Peggy Exits</h3>
+    <p>
+      If Peggy is already on the called side, she simply walks back out. If she is on
+      the <em>opposite</em> side, she uses the magic door to cross to the other path and then
+      exits. Either way, she emerges from the correct side.
+    </p>
+    <p>
+      A cheater who doesn't know the secret word is stuck on whichever path they entered.
+      They can only hope that Victor calls the side they happen to be on — a 50% gamble each round.
+    </p>
+
+    <!-- ── Try It ── -->
+    <h2>Try It Yourself</h2>
+    <p>
+      Step through the protocol below. You play both Peggy and Victor — watching the same events
+      from both perspectives simultaneously.
+    </p>
+
+    <figure>
+    <section class="demo-section" id="caveDemo" aria-label="Interactive Ali Baba Cave demo">
+      <div class="demo-inner">
+
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;">
+          <div>
+            <span class="demo-eyebrow">Interactive Demo</span>
+            <div class="demo-title">The Ali Baba Cave</div>
+            <p class="demo-desc" id="demoMsg">Click <strong>Begin Round</strong> to start.</p>
+          </div>
+          <div class="demo-stats" style="margin:0; border:none; padding:0; gap:1.5rem; flex-shrink:0;">
+            <div class="demo-stat">
+              <div class="demo-stat-value" id="statRounds">0</div>
+              <div class="demo-stat-label">Rounds</div>
+            </div>
+            <div class="demo-stat">
+              <div class="demo-stat-value" id="statConf">—</div>
+              <div class="demo-stat-label">Confidence</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="phase-bar">
+          <div class="phase-step current" id="ps0"></div>
+          <div class="phase-step" id="ps1"></div>
+          <div class="phase-step" id="ps2"></div>
+          <div class="phase-step" id="ps3"></div>
+        </div>
+
+        <div class="cave-demo-body">
+
+          <div class="cave-left">
+            <div class="cave-wrap">
+              <svg viewBox="0 0 300 268" aria-label="Cave diagram showing paths A and B">
+                <defs>
+                  <filter id="softGlow" x="-60%" y="-60%" width="220%" height="220%">
+                    <feGaussianBlur stdDeviation="5" result="blur"/>
+                    <feMerge>
+                      <feMergeNode in="blur"/>
+                      <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                  </filter>
+                  <radialGradient id="rockGrad" cx="38%" cy="30%" r="68%">
+                    <stop offset="0%"   stop-color="#1c1c28"/>
+                    <stop offset="100%" stop-color="#0e0e14"/>
+                  </radialGradient>
+                  <radialGradient id="caveGrad" cx="50%" cy="45%" r="55%">
+                    <stop offset="0%"   stop-color="#0e0e18"/>
+                    <stop offset="100%" stop-color="#080810"/>
+                  </radialGradient>
+                </defs>
+
+                <path fill-rule="evenodd"
+                      d="M 268,118 A 118,98 0 1 0 32,118 A 118,98 0 1 0 268,118 Z
+                         M 205,113 A 55,65 0 1 0 95,113 A 55,65 0 1 0 205,113 Z"
+                      fill="url(#caveGrad)" stroke="#1c1c2a" stroke-width="1.5"/>
+                <ellipse cx="150" cy="113" rx="55" ry="65"
+                         fill="url(#rockGrad)" stroke="#20202e" stroke-width="1"/>
+                <ellipse cx="150" cy="117" rx="88" ry="73" fill="none" stroke="#0f0f18" stroke-width="1.2" opacity="0.7"/>
+                <ellipse cx="150" cy="115" rx="75" ry="61" fill="none" stroke="#0f0f18" stroke-width="1" opacity="0.5"/>
+
+                <path id="hlA"
+                      d="M 150,216 A 118,98 0 1 0 150,20 L 150,48 A 55,65 0 1 1 150,178 Z"
+                      fill="rgba(100,140,220,0.18)" opacity="0"/>
+                <path id="hlB"
+                      d="M 150,216 A 118,98 0 1 1 150,20 L 150,48 A 55,65 0 1 0 150,178 Z"
+                      fill="rgba(100,140,220,0.18)" opacity="0"/>
+
+                <rect x="134" y="207" width="32" height="62" fill="#111113"/>
+                <line x1="134" y1="207" x2="134" y2="234" stroke="#222232" stroke-width="2"/>
+                <line x1="166" y1="207" x2="166" y2="234" stroke="#222232" stroke-width="2"/>
+                <path d="M 134,207 Q 150,201 166,207" fill="none" stroke="#222232" stroke-width="1.5"/>
+                <line x1="134" y1="234" x2="166" y2="234" stroke="#1c1c2c" stroke-width="1"/>
+                <text x="150" y="249" text-anchor="middle" fill="#303050" font-size="7" font-family="monospace" letter-spacing="2" opacity="0.7">ENTRY</text>
+
+                <rect x="140" y="41" width="20" height="14" fill="#111113"/>
+                <rect x="137" y="37" width="26" height="22" rx="3" fill="#131320" stroke="#2c2c44" stroke-width="1.5"/>
+                <path d="M 138,44 Q 150,37 162,44" fill="none" stroke="#2c2c44" stroke-width="1.2"/>
+                <rect x="139" y="45" width="9" height="10" rx="1" fill="none" stroke="#222235" stroke-width="0.8"/>
+                <rect x="152" y="45" width="9" height="10" rx="1" fill="none" stroke="#222235" stroke-width="0.8"/>
+                <circle cx="159" cy="52" r="2.2" fill="#282840"/>
+                <ellipse id="doorGlowEl" cx="150" cy="48" rx="24" ry="15"
+                         fill="rgba(129,140,248,0.55)" opacity="0" filter="url(#softGlow)"/>
+                <text x="150" y="30" text-anchor="middle" fill="#303050" font-size="7" font-family="monospace" letter-spacing="2" opacity="0.7">DOOR</text>
+
+                <text id="labelA" x="57" y="123" text-anchor="middle" fill="#2c2c48" font-size="22" font-weight="700" font-family="monospace">A</text>
+                <text id="labelB" x="243" y="123" text-anchor="middle" fill="#2c2c48" font-size="22" font-weight="700" font-family="monospace">B</text>
+
+                <g transform="translate(150, 255)">
+                  <circle r="11" fill="#12121c" stroke="#2e2e48" stroke-width="1.5"/>
+                  <text text-anchor="middle" dy="4.5" fill="#818cf8" font-size="11" font-weight="700" font-family="monospace">V</text>
+                </g>
+
+                <g id="callBubble" opacity="0" transform="translate(150, 255)">
+                  <polygon points="-5,-18 5,-18 0,-11" fill="#1c1c32" stroke="#818cf8" stroke-width="1" stroke-linejoin="round"/>
+                  <rect x="-38" y="-48" width="76" height="29" rx="6" fill="#1c1c32" stroke="#818cf8" stroke-width="1.2"/>
+                  <text id="callText" x="0" y="-30" text-anchor="middle" fill="#ececf4" font-size="12" font-weight="700" font-family="monospace">Path A!</text>
+                </g>
+
+                <g id="peggyG" style="transform: translate(150px, 233px);">
+                  <circle id="peggyCircle" r="11" fill="#181828" stroke="#818cf8" stroke-width="2"/>
+                  <text id="peggyLabel" text-anchor="middle" dy="4.5" fill="#ececf4" font-size="11" font-weight="700" font-family="monospace">P</text>
+                </g>
+              </svg>
+            </div>
+          </div>
+
+          <div class="cave-right">
+
+            <div id="panelIdle">
+              <div class="info-panel">
+                <div class="info-panel-label">Protocol Roles</div>
+                <div class="role-row">
+                  <div class="role-badge">
+                    <div class="role-dot peggy"></div>
+                    <span><strong>P</strong> = Peggy (Prover) — knows the secret word</span>
+                  </div>
+                  <div class="role-badge">
+                    <div class="role-dot victor"></div>
+                    <span><strong>V</strong> = Victor (Verifier) — waits outside</span>
+                  </div>
+                </div>
+                <p style="font-size:0.82rem; color:var(--muted); margin-top:0.7rem; line-height:1.65;">
+                  The magic door in the centre connects Path A and Path B.
+                  Only someone who knows the secret word can pass through it.
+                </p>
+              </div>
+            </div>
+
+            <div id="panelInside" style="display:none;">
+              <div class="info-panel">
+                <div class="info-panel-label">Peggy's Secret Choice</div>
+                <div class="choice-display">
+                  <div class="choice-box" id="choiceBox">
+                    <div class="choice-box-label">Path taken</div>
+                    <div class="choice-box-value" id="choiceValue">—</div>
+                  </div>
+                  <div class="choice-box hidden" style="flex:2;">
+                    <div class="choice-box-label">Victor's view</div>
+                    <div class="choice-box-value" style="color:var(--muted); font-size:0.8rem; line-height:1.5;">
+                      Victor waits outside.<br>He cannot see which path<br>Peggy chose.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="panelCalled" style="display:none;">
+              <div class="info-panel" style="margin-bottom:0.7rem;">
+                <div class="info-panel-label">Victor's Challenge</div>
+                <div class="choice-display">
+                  <div class="choice-box" id="peggyBox">
+                    <div class="choice-box-label">Peggy is on</div>
+                    <div class="choice-box-value" id="peggyBoxVal">—</div>
+                  </div>
+                  <div class="choice-box" id="victorBox">
+                    <div class="choice-box-label">Victor calls</div>
+                    <div class="choice-box-value" id="victorBoxVal">—</div>
+                  </div>
+                </div>
+              </div>
+              <div class="info-panel" id="doorPanel">
+                <div class="info-panel-label">What Peggy must do</div>
+                <p id="doorNote" style="font-size:0.82rem; line-height:1.65; color:var(--text); margin:0;"></p>
+              </div>
+            </div>
+
+            <div id="panelExited" style="display:none;">
+              <div class="info-panel">
+                <div class="info-panel-label">Round Result</div>
+                <div class="verify-row v-ok" id="resultRow">
+                  <span style="font-size:0.95rem;">✓</span>
+                  <span id="resultText"></span>
+                </div>
+                <div class="conf-bar-wrap">
+                  <div class="conf-bar" id="confBar"></div>
+                </div>
+                <p style="font-size:0.7rem; color:var(--muted); margin:0; line-height:1.5;">
+                  Probability that Peggy knows the secret (assuming she could be cheating)
+                </p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="demo-actions" style="margin-top:1.2rem;">
+          <button class="demo-action-btn" id="actionBtn" onclick="handleAction()">Begin Round</button>
+          <button class="demo-again-btn" id="resetBtn" onclick="resetDemo()" style="display:none;">Reset</button>
+        </div>
+
+      </div>
+
+      <p class="demo-caption">
+        <strong>Figure 3.</strong> &ensp;Interactive simulation of the Ali Baba Cave zero-knowledge
+        proof. Peggy's random path choice is shown to <em>you</em> (the reader) but is invisible to
+        Victor. Both parties' perspectives are displayed simultaneously for clarity.
+        Original protocol by Jean-Jacques Quisquater et al., 1989.
+      </p>
+    </section>
+    </figure>
+
+    <!-- "Why ZK" and "How Many Rounds" sections contain LaTeX — rendered via set:html -->
+    <Fragment set:html={postDemoHtml} />
+
+  </div>
+</BaseLayout>

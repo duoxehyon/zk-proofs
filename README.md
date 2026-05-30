@@ -15,7 +15,12 @@ An interactive guide to zero-knowledge proofs — covering theory, protocols, an
 
 ## Running locally
 
-Just open `index.html` in a browser. No build step or server required.
+```bash
+npm install
+npm run dev      # dev server at http://localhost:4321
+npm run build    # production build → dist/
+npm run preview  # preview the built site
+```
 
 ## Authors
 
